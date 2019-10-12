@@ -1,7 +1,7 @@
 # Training, optimizing and fitting models
 import pandas as pd
 import numpy as np
-import lightgbm as lgb
+from lightgbm import LGBMRegressor
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.linear_model import Lasso
@@ -61,7 +61,7 @@ class Param:
                       'colsample_bytree': sp_uniform(loc=0.4, scale=0.6),
                       'reg_alpha': [0, 1e-1, 1, 2, 5, 7, 10, 50, 100],
                       'reg_lambda': [0, 1e-1, 1, 5, 10, 20, 50, 100]}
-        lgbm = lgb.LGBMRegressor(max_depth=-1, silent=True, metric='None',
+        lgbm = LGBMRegressor(max_depth=-1, silent=True, metric='None',
                                  n_estimators=5000)
         lgbm_cv = RandomizedSearchCV(estimator=lgbm, param_distributions=param_test, n_iter=iter,
                                      scoring='r2', cv=5, verbose=1, n_jobs=-1)
@@ -73,7 +73,7 @@ class Param:
 class LGBM(BaseEstimator):
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
-        self.model = lgb.LGBMRegressor(max_depth=-1, silent=True, n_estimators=5000, **self.__dict__)
+        self.model = LGBMRegressor(max_depth=-1, silent=True, n_estimators=5000, **self.__dict__)
 
     def fit(self, X, y):
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.2)
@@ -84,6 +84,50 @@ class LGBM(BaseEstimator):
                   "verbose": 0}
         params = dict()
         self.model.fit(X_train, y_train, **fit_params)
+        return self
+
+    def predict(self, X):
+        return self.model.predict(X)
+
+    def get_params(self, deep=True):
+        return {k: self.__dict__[k] for k in self.__dict__.keys() if k != 'model'}
+
+    def set_params(self, **params):
+        for parameter, value in params.items():
+            setattr(self, parameter, value)
+        return self
+
+class RF(BaseEstimator):
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+        for key, value in self.__dict__.items():
+            self.__dict__[key] = value
+        self.model = RandomForestRegressor()
+
+    def fit(self, X, y):
+        self.model.fit(X, y)
+        return self
+
+    def predict(self, X):
+        return self.model.predict(X)
+
+    def get_params(self, deep=True):
+        return {k: self.__dict__[k] for k in self.__dict__.keys() if k != 'model'}
+
+    def set_params(self, **params):
+        for parameter, value in params.items():
+            setattr(self, parameter, value)
+        return self
+
+class LassoRegressor(BaseEstimator):
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+        for key, value in self.__dict__.items():
+            self.__dict__[key] = value
+        self.model = Lasso(**self.__dict__)
+
+    def fit(self, X, y):
+        self.model.fit(X,y)
         return self
 
     def predict(self, X):
