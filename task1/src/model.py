@@ -1,5 +1,6 @@
 # Training, optimizing and fitting models
 import pandas as pd
+import numpy as np
 import lightgbm as lgb
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import RandomizedSearchCV
@@ -11,6 +12,7 @@ from sklearn.model_selection import KFold
 from sklearn.model_selection import cross_val_score
 from scipy.stats import randint as sp_randint
 from scipy.stats import uniform as sp_uniform
+from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin
 
 class Param:
     def __init__(self, X, y):
@@ -68,26 +70,33 @@ class Param:
             pd.DataFrame(lgbm_cv.best_params_, index=[0]).to_csv("data/lgbm_par.csv")
         return lgbm_cv.best_params_, lgbm_cv.best_score_
 
-class LGBM:
-    def __init__(self):
-        self.model = lgbm = lgb.LGBMRegressor(max_depth=-1, silent=True, metric='None', n_estimators=5000)
+class LGBM(BaseEstimator):
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+        self.model = lgb.LGBMRegressor(max_depth=-1, silent=True, n_estimators=5000, **self.__dict__)
 
     def fit(self, X, y):
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.2)
-        params = {"early_stopping_rounds": 30,
+        fit_params = {"early_stopping_rounds": 30,
                   "eval_metric": 'mse',
                   "eval_set": [(X_test, y_test)],
                   'eval_names': ['valid'],
                   "verbose": 0}
-        best_params = pd.read_csv("data/lgbm_par.csv", index_col=0)
-        params = dict(params, **best_params.to_dict())
-        self.model.fit(X_train, y_train, **params)
+        params = dict()
+        self.model.fit(X_train, y_train, **fit_params)
         return self
 
     def predict(self, X):
         return self.model.predict(X)
 
+    def get_params(self, deep=True):
+        return {k: self.__dict__[k] for k in self.__dict__.keys() if k != 'model'}
+
+    def set_params(self, **params):
+        for parameter, value in params.items():
+            setattr(self, parameter, value)
+        return self
+
 def r2_cv(model, X, y):
     kf = KFold(5, shuffle=True).get_n_splits(X, y)
-    return cross_val_score(model, X, y, scoring='r2', cv = kf)
-
+    return cross_val_score(model, X, y, scoring='r2', cv=kf)
