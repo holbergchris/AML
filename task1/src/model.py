@@ -11,7 +11,10 @@ from sklearn.model_selection import KFold
 from sklearn.model_selection import cross_val_score
 from scipy.stats import randint as sp_randint
 from scipy.stats import uniform as sp_uniform
-from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin, clone
+from sklearn.base import BaseEstimator, clone
+from keras.callbacks import ModelCheckpoint
+from keras.models import Sequential
+from keras.layers import Dense
 
 
 class LGBM(BaseEstimator):
@@ -176,13 +179,61 @@ class LassoRegressor(BaseEstimator):
         lasso_cv.fit(X, y)
 
         if save:
-            par_df = pd.DataFrame(lasso_cv.best_params_, index=[0]).to_csv("data/lasso_par.csv")
+            pd.DataFrame(lasso_cv.best_params_, index=[0]).to_csv("data/lasso_par.csv")
 
         for key in lasso_cv.best_params_:
             self.__dict__[key] = lasso_cv.best_params_[key]
 
         print("Best score:", lasso_cv.best_score_, "obtained for\n", lasso_cv.best_params_)
 
+class NN(BaseEstimator):
+    def __init__(self, input=128, hidden=256, num_hidden=3):
+        self.input = input
+        self.hidden = hidden
+        self.num_hidden = num_hidden
+        self.model = Sequential()
+
+    def fit(self, X, y):
+        self.model.add(Dense(self.input, kernel_initializer='normal', input_dim=X.shape[1], activation='relu'))
+        for i in range(self.num_hidden):
+            self.model.add(Dense(self.hidden, kernel_initializer='normal', activation='relu'))
+        self.model.add(Dense(1, kernel_initializer='normal', activation='linear'))
+        self.model.compile(loss='mean_squared_error', optimizer='adam', metrics=['mean_squared_error'])
+        checkpoint = ModelCheckpoint('data/.nn_weights.hdf5', monitor='val_loss', verbose=0, save_best_only=True,
+                                     mode='auto')
+        callbacks_list = [checkpoint]
+        self.model.fit(X, y, epochs=300, batch_size=64, validation_split=.2, verbose=0, callbacks=callbacks_list)
+        self.model.load_weights('data/.nn_weights.hdf5')
+        self.model.compile(loss='mean_squared_error', optimizer='adam', metrics=['mean_squared_error'])
+        return self
+
+    def predict(self, X):
+        return self.model.predict(X)[:, 0]
+
+    def get_params(self, deep=True):
+        return {k: self.__dict__[k] for k in self.__dict__.keys() if k != 'model'}
+
+    def set_params(self, **params):
+        for parameter, value in params.items():
+            setattr(self, parameter, value)
+        return self
+
+    def tune(self, X, y, scoring='r2', save=False):
+        par = {
+            "input": [64, 128],
+            "hidden": [128, 256],
+            "num_hidden": [2, 3, 4]
+        }
+        nn_cv = GridSearchCV(self, par, scoring=scoring, cv=5, verbose=1, n_jobs=1)
+        nn_cv.fit(X, y)
+
+        if save:
+            pd.DataFrame(nn_cv.best_params_, index=[0]).to_csv("data/nn_par.csv")
+
+        for key in nn_cv.best_params_:
+            self.__dict__[key] = nn_cv.best_params_[key]
+
+        print("Best score:", nn_cv.best_score_, "obtained for\n", nn_cv.best_params_)
 
 class AveragingModels(BaseEstimator):
     def __init__(self, models):
